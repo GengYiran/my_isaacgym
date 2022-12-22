@@ -1,7 +1,29 @@
+"""
+Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+
+NVIDIA CORPORATION and its licensors retain all intellectual property
+and proprietary rights in and to this software, related documentation
+and any modifications thereto. Any use, reproduction, disclosure or
+distribution of this software and related documentation without an express
+license agreement from NVIDIA CORPORATION is strictly prohibited.
+
+Actor Scaling
+------------
+- Loads a handful of MJCF and URDF assets and scales them using the runtime scaling API
+"""
 
 import math
 import numpy as np
 from isaacgym import gymapi, gymutil
+
+args = gymutil.parse_arguments(
+    description="Actor scaling. Demonstrates runtime scaling of actors",
+    custom_parameters=[
+        {"name": "--min_scale", "type": float, "default": 0.5, "help": "Lower scale value"},
+        {"name": "--max_scale", "type": float, "default": 2.0, "help": "Upper scale value"},
+        {"name": "--num_columns", "type": int, "default": 4, "help": "Number of actors from the same asset in one row"}
+    ]
+)
 
 # initialize gym
 gym = gymapi.acquire_gym()
@@ -41,10 +63,9 @@ asset_root = "../../assets"
 asset_file = "urdf/handcraft_cabinet/mobility.urdf"
 
 asset_options = gymapi.AssetOptions()
+asset_options.density = 500
+asset_options.collapse_fixed_joints = True
 asset_options.fix_base_link = True
-asset_options.flip_visual_attachments = True
-asset_options.use_mesh_materials = True
-
 print("Loading asset '%s' from '%s'" % (asset_file, asset_root))
 asset=gym.load_asset(sim, asset_root, asset_file, asset_options)
 
@@ -58,8 +79,13 @@ cam_pos = gymapi.Vec3(1, 1, 1.0)
 cam_target = gymapi.Vec3(0, -0, 1.0)
 gym.viewer_camera_look_at(viewer, None, cam_pos, cam_target)
 
+# cache useful handles
+envs = []
+actor_handles = []
+
 # create env
-env = gym.create_env(sim, env_lower, env_upper, 1)
+env = gym.create_env(sim, env_lower, env_upper, args.num_columns)
+envs.append(env)
 
 # add actor
 pose = gymapi.Transform()
@@ -67,6 +93,7 @@ pose.p = gymapi.Vec3(0.0, 2, 0.0)
 pose.r = gymapi.Quat(-0.707107, 0.0, 0.0, 0.707107)
 
 actor_handle = gym.create_actor(env, asset, pose, "actor", 0, 1)
+actor_handles.append(actor_handle)
 
 while not gym.query_viewer_has_closed(viewer):
     # step the physics
@@ -82,5 +109,6 @@ while not gym.query_viewer_has_closed(viewer):
     gym.sync_frame_time(sim)
 
 print("Done")
+
 gym.destroy_viewer(viewer)
 gym.destroy_sim(sim)
